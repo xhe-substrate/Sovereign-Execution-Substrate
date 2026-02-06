@@ -1,14 +1,14 @@
 /**
  * SES-CORE.JS - Sovereign Execution Substrate
  * Deterministic Controlled Execution (DCX) Runtime
- * 
+ *
  * Core Invariants:
  * - Every state change originates from a Pulse
  * - No unbounded execution anywhere
  * - All results are replayable from CIDs
  * - Resource use is explicit and capped
  * - Parallelism is bounded
- * 
+ *
  * @version 1.0.0
  */
 
@@ -59,11 +59,11 @@
       // Unique identifiers
       this.pulseId = null; // Set after creation (CID of entire pulse)
       this.parentPulseId = options.parentPulseId || null;
-      
+
       // Timing (logical, not wall-clock)
       this.logicalTick = options.logicalTick || 0;
       this.createdAt = new Date().toISOString(); // For reference only, not used in execution
-      
+
       // Resource Bounds (ENFORCED)
       this.bounds = {
         maxSteps: options.maxSteps || DEFAULT_BOUNDS.maxSteps,
@@ -71,17 +71,17 @@
         maxBranchDepth: options.maxBranchDepth || DEFAULT_BOUNDS.maxBranchDepth,
         maxExecutionMs: options.maxExecutionMs || DEFAULT_BOUNDS.maxExecutionMs
       };
-      
+
       // Deterministic Execution Components (CIDs)
       this.inputCid = null;
       this.functionCid = null;
       this.outputCid = null;
       this.traceCid = null;
-      
+
       // Identity & Attestation
       this.author = options.author || 'did:anonymous';
       this.signature = null; // Ed25519 signature (to be implemented)
-      
+
       // Execution State
       this.status = 'pending'; // pending | executing | completed | failed | violated
       this.error = null;
@@ -176,10 +176,10 @@
       this.branchDepth = 0;
       this.startTime = null;
       this.aborted = false;
-      
+
       // Registered functions (CID -> function)
       this.functions = new Map();
-      
+
       // Event listeners
       this.listeners = {
         'step': [],
@@ -234,7 +234,7 @@
       if (this.branchDepth >= pulse.bounds.maxBranchDepth) {
         return { valid: false, reason: 'maxBranchDepth', current: this.branchDepth, limit: pulse.bounds.maxBranchDepth };
       }
-      
+
       const elapsed = Date.now() - this.startTime;
       if (elapsed >= pulse.bounds.maxExecutionMs) {
         return { valid: false, reason: 'maxExecutionMs', current: elapsed, limit: pulse.bounds.maxExecutionMs };
@@ -246,14 +246,14 @@
     // Track a step (must be called by executing functions)
     step(operation, args, result) {
       this.stepCount++;
-      
+
       const stepData = {
         operation,
         args: this.serializeArgs(args),
         result: this.serializeResult(result),
         memory: this.memoryUsed
       };
-      
+
       if (this.trace) {
         this.trace.addStep(stepData);
       }
@@ -319,19 +319,19 @@
     // Create and execute a Pulse
     async createPulse(options) {
       const pulse = new Pulse(options);
-      
+
       // Store input and get CID
       if (options.input !== undefined) {
         pulse.inputCid = await this.store.store(options.input);
       }
-      
+
       // Register or use existing function CID
       if (options.fn) {
         pulse.functionCid = await this.registerFunction(options.fn, options.fnMetadata || {});
       } else if (options.functionCid) {
         pulse.functionCid = options.functionCid;
       }
-      
+
       return pulse;
     }
 
@@ -345,17 +345,17 @@
       this.branchDepth = 0;
       this.startTime = Date.now();
       this.aborted = false;
-      
+
       // Set deterministic seed from input
       this.trace.deterministicSeed = pulse.inputCid;
       this.trace.startTime = new Date().toISOString();
-      
+
       pulse.status = 'executing';
 
       try {
         // Fetch input
         const input = pulse.inputCid ? await this.store.fetch(pulse.inputCid) : null;
-        
+
         // Get function
         const fnEntry = this.getFunction(pulse.functionCid);
         if (!fnEntry) {
@@ -364,23 +364,23 @@
 
         // Create bounded execution context
         const ctx = this.createExecutionContext();
-        
+
         // Execute with bounds
         const output = await fnEntry.fn(input, ctx);
-        
+
         // Store output and trace
         pulse.outputCid = await this.store.store(output);
-        
+
         this.trace.endTime = new Date().toISOString();
         pulse.traceCid = await this.store.store(this.trace.toJSON());
-        
+
         // Generate pulse ID from complete pulse
         pulse.status = 'completed';
         pulse.pulseId = await generateCID(pulse.toJSON());
-        
+
         // Store the complete pulse
         await this.store.store(pulse.toJSON());
-        
+
         this.emit('complete', {
           pulse: pulse.toJSON(),
           output,
@@ -405,11 +405,11 @@
             limit: error.limit
           } : {})
         };
-        
+
         this.trace.endTime = new Date().toISOString();
         pulse.traceCid = await this.store.store(this.trace.toJSON());
         pulse.pulseId = await generateCID(pulse.toJSON());
-        
+
         this.emit('error', { pulse: pulse.toJSON(), error: pulse.error });
 
         return {
@@ -448,7 +448,7 @@
       const input = pulse.inputCid ? await this.store.fetch(pulse.inputCid) : null;
       const expectedOutput = pulse.outputCid ? await this.store.fetch(pulse.outputCid) : null;
       const expectedTrace = pulse.traceCid ? await this.store.fetch(pulse.traceCid) : null;
-      
+
       // Get function
       const fnEntry = this.getFunction(pulse.functionCid);
       if (!fnEntry) {
@@ -459,10 +459,10 @@
       const replayPulse = Pulse.fromJSON(pulse);
       replayPulse.outputCid = null;
       replayPulse.traceCid = null;
-      
+
       // Execute replay
       const result = await this.execute(replayPulse);
-      
+
       if (!result.success) {
         return { valid: false, reason: 'Replay execution failed', error: result.error };
       }
@@ -485,11 +485,11 @@
     // Replay from a specific pulse
     async replay(pulseIdOrData) {
       let pulseData = pulseIdOrData;
-      
+
       if (typeof pulseIdOrData === 'string') {
         pulseData = await this.store.fetch(pulseIdOrData);
       }
-      
+
       if (!pulseData) {
         throw new Error('Pulse not found for replay');
       }

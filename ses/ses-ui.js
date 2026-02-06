@@ -32,7 +32,7 @@
   // ============================================
   async function init() {
     // Create store (hybrid: memory + IndexedDB)
-    UIState.store = SESStore.createStore({ type: 'hybrid' });
+    UIState.store = await SESStore.createStore({ type: 'hybrid' });
 
     // Create DCX runtime
     UIState.runtime = new SESCore.DCXRuntime(UIState.store);

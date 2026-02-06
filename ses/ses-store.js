@@ -1,348 +1,234 @@
-/**
- * SES-STORE.JS - Content-Addressed Storage
- * 
- * Provides content-addressed storage using SHA-256 CIDs.
- * Works in browser (IndexedDB) and Node.js (in-memory/file).
- * 
- * Core Properties:
- * - All objects are immutable once stored
- * - Every object is addressed by its content hash
- * - Storage is transport-agnostic
- * 
- * @version 1.0.0
- */
-
 (function(global) {
   'use strict';
 
-  const STORE_NAME = 'ses-content-store';
+  if (global.SESStore) return;
+
+  const DB_NAME = 'ses-substrate';
   const DB_VERSION = 1;
 
-  // ============================================
-  // CID GENERATION (shared with core)
-  // ============================================
-  async function generateCID(data) {
-    const encoder = new TextEncoder();
-    const dataString = typeof data === 'string' ? data : JSON.stringify(data);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(dataString));
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    return 'cid:sha256:' + hashHex;
-  }
+  const STORES = {
+    OBJECTS: 'objects',
+    PULSES: 'pulses',
+    IDENTITIES: 'identities',
+    CLAIMS: 'claims',
+    ATTESTATIONS: 'attestations',
+    REPUTATION: 'reputation',
+    CONTRIBUTIONS: 'contributions',
+    CONTEXTS: 'contexts'
+  };
 
-  // ============================================
-  // BASE STORE INTERFACE
-  // ============================================
-  class BaseStore {
-    async store(data) {
-      throw new Error('Not implemented');
-    }
-
-    async fetch(cid) {
-      throw new Error('Not implemented');
-    }
-
-    async has(cid) {
-      throw new Error('Not implemented');
-    }
-
-    async list() {
-      throw new Error('Not implemented');
-    }
-
-    async clear() {
-      throw new Error('Not implemented');
-    }
-  }
-
-  // ============================================
-  // IN-MEMORY STORE
-  // For testing and Node.js without persistence
-  // ============================================
-  class MemoryStore extends BaseStore {
+  class SESStore {
     constructor() {
-      super();
-      this.data = new Map();
-    }
-
-    async store(data) {
-      const cid = await generateCID(data);
-      const serialized = JSON.stringify(data);
-      this.data.set(cid, serialized);
-      return cid;
-    }
-
-    async fetch(cid) {
-      const serialized = this.data.get(cid);
-      if (!serialized) return null;
-      return JSON.parse(serialized);
-    }
-
-    async has(cid) {
-      return this.data.has(cid);
-    }
-
-    async list() {
-      return Array.from(this.data.keys());
-    }
-
-    async clear() {
-      this.data.clear();
-    }
-
-    async size() {
-      return this.data.size;
-    }
-
-    async export() {
-      const entries = [];
-      for (const [cid, data] of this.data) {
-        entries.push({ cid, data: JSON.parse(data) });
-      }
-      return entries;
-    }
-
-    async import(entries) {
-      for (const entry of entries) {
-        this.data.set(entry.cid, JSON.stringify(entry.data));
-      }
-    }
-  }
-
-  // ============================================
-  // INDEXEDDB STORE
-  // Browser-native persistent storage
-  // ============================================
-  class IndexedDBStore extends BaseStore {
-    constructor(dbName = 'ses-db') {
-      super();
-      this.dbName = dbName;
       this.db = null;
+      this.ready = false;
       this.initPromise = null;
     }
 
     async init() {
-      if (this.db) return this.db;
+      if (this.ready) return this;
       if (this.initPromise) return this.initPromise;
 
       this.initPromise = new Promise((resolve, reject) => {
-        const request = indexedDB.open(this.dbName, DB_VERSION);
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-        request.onerror = () => reject(request.error);
-        
+        request.onerror = () => reject(new Error('IndexedDB open failed: ' + request.error));
         request.onsuccess = () => {
           this.db = request.result;
-          resolve(this.db);
+          this.ready = true;
+          resolve(this);
         };
-
         request.onupgradeneeded = (event) => {
           const db = event.target.result;
-          
-          if (!db.objectStoreNames.contains(STORE_NAME)) {
-            db.createObjectStore(STORE_NAME, { keyPath: 'cid' });
-          }
+          Object.values(STORES).forEach(storeName => {
+            if (!db.objectStoreNames.contains(storeName)) {
+              const store = db.createObjectStore(storeName, { keyPath: 'cid' });
+              switch(storeName) {
+                case STORES.PULSES:
+                  store.createIndex('author', 'data.author', { unique: false });
+                  store.createIndex('status', 'data.status', { unique: false });
+                  store.createIndex('parentPulseId', 'data.parentPulseId', { unique: false });
+                  store.createIndex('createdAt', 'data.createdAt', { unique: false });
+                  break;
+                case STORES.CLAIMS:
+                  store.createIndex('subject', 'data.subject', { unique: false });
+                  store.createIndex('author', 'data.author', { unique: false });
+                  store.createIndex('status', 'data.status', { unique: false });
+                  break;
+                case STORES.ATTESTATIONS:
+                  store.createIndex('claimId', 'data.claimId', { unique: false });
+                  store.createIndex('agent', 'data.agent', { unique: false });
+                  break;
+                case STORES.REPUTATION:
+                  store.createIndex('did', 'data.did', { unique: true });
+                  break;
+                case STORES.CONTRIBUTIONS:
+                  store.createIndex('author', 'data.author', { unique: false });
+                  store.createIndex('type', 'data.type', { unique: false });
+                  break;
+                case STORES.IDENTITIES:
+                  store.createIndex('did', 'data.did', { unique: true });
+                  break;
+              }
+            }
+          });
         };
       });
 
       return this.initPromise;
     }
 
-    async store(data) {
-      await this.init();
-      const cid = await generateCID(data);
-      
-      return new Promise((resolve, reject) => {
-        const transaction = this.db.transaction([STORE_NAME], 'readwrite');
-        const store = transaction.objectStore(STORE_NAME);
-        
-        const request = store.put({
-          cid,
-          data: JSON.stringify(data),
-          timestamp: Date.now()
-        });
+    async generateCID(data) {
+      if (global.SESCore && global.SESCore.generateCID) {
+        return global.SESCore.generateCID(data);
+      }
+      const encoder = new TextEncoder();
+      const str = typeof data === 'string' ? data : JSON.stringify(data);
+      const hash = await crypto.subtle.digest('SHA-256', encoder.encode(str));
+      return 'cid:sha256:' + Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,'0')).join('');
+    }
 
-        request.onsuccess = () => resolve(cid);
-        request.onerror = () => reject(request.error);
+    async store(data, storeName = STORES.OBJECTS) {
+      await this.init();
+      const cid = await this.generateCID(data);
+      const record = { cid, data, storedAt: new Date().toISOString() };
+      return new Promise((resolve, reject) => {
+        const tx = this.db.transaction(storeName, 'readwrite');
+        const store = tx.objectStore(storeName);
+        const req = store.put(record);
+        req.onsuccess = () => resolve(cid);
+        req.onerror = () => reject(new Error('Store failed: ' + req.error));
       });
     }
 
-    async fetch(cid) {
+    async fetch(cid, storeName = STORES.OBJECTS) {
       await this.init();
-      
       return new Promise((resolve, reject) => {
-        const transaction = this.db.transaction([STORE_NAME], 'readonly');
-        const store = transaction.objectStore(STORE_NAME);
-        const request = store.get(cid);
+        const tx = this.db.transaction(storeName, 'readonly');
+        const store = tx.objectStore(storeName);
+        const req = store.get(cid);
+        req.onsuccess = () => resolve(req.result ? req.result.data : null);
+        req.onerror = () => reject(new Error('Fetch failed: ' + req.error));
+      });
+    }
 
-        request.onsuccess = () => {
-          if (request.result) {
-            resolve(JSON.parse(request.result.data));
+    async exists(cid, storeName = STORES.OBJECTS) {
+      return (await this.fetch(cid, storeName)) !== null;
+    }
+
+    async queryByIndex(storeName, indexName, value) {
+      await this.init();
+      return new Promise((resolve, reject) => {
+        const tx = this.db.transaction(storeName, 'readonly');
+        const store = tx.objectStore(storeName);
+        const index = store.index(indexName);
+        const req = index.getAll(value);
+        req.onsuccess = () => resolve(req.result.map(r => r.data));
+        req.onerror = () => reject(new Error('Query failed: ' + req.error));
+      });
+    }
+
+    async getAll(storeName) {
+      await this.init();
+      return new Promise((resolve, reject) => {
+        const tx = this.db.transaction(storeName, 'readonly');
+        const store = tx.objectStore(storeName);
+        const req = store.getAll();
+        req.onsuccess = () => resolve(req.result.map(r => r.data));
+        req.onerror = () => reject(new Error('GetAll failed: ' + req.error));
+      });
+    }
+
+    async count(storeName) {
+      await this.init();
+      return new Promise((resolve, reject) => {
+        const tx = this.db.transaction(storeName, 'readonly');
+        const store = tx.objectStore(storeName);
+        const req = store.count();
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(new Error('Count failed: ' + req.error));
+      });
+    }
+
+    async delete(cid, storeName = STORES.OBJECTS) {
+      await this.init();
+      return new Promise((resolve, reject) => {
+        const tx = this.db.transaction(storeName, 'readwrite');
+        const store = tx.objectStore(storeName);
+        const req = store.delete(cid);
+        req.onsuccess = () => resolve(true);
+        req.onerror = () => reject(new Error('Delete failed: ' + req.error));
+      });
+    }
+
+    async clear(storeName) {
+      await this.init();
+      return new Promise((resolve, reject) => {
+        const tx = this.db.transaction(storeName, 'readwrite');
+        const store = tx.objectStore(storeName);
+        const req = store.clear();
+        req.onsuccess = () => resolve(true);
+        req.onerror = () => reject(new Error('Clear failed: ' + req.error));
+      });
+    }
+
+    async getStats() {
+      await this.init();
+      const stats = {};
+      for (const s of Object.values(STORES)) stats[s] = await this.count(s);
+      return stats;
+    }
+
+    async exportAll() {
+      await this.init();
+      const exportData = {};
+      for (const s of Object.values(STORES)) exportData[s] = await this.getAll(s);
+      return { version: DB_VERSION, exportedAt: new Date().toISOString(), stores: exportData };
+    }
+
+    async importAll(exportData) {
+      await this.init();
+      const results = {};
+      for (const [storeName, records] of Object.entries(exportData.stores)) {
+        results[storeName] = { imported: 0, skipped: 0 };
+        for (const record of records) {
+          const cid = await this.generateCID(record);
+          if (!(await this.exists(cid, storeName))) {
+            await this.store(record, storeName);
+            results[storeName].imported++;
           } else {
-            resolve(null);
+            results[storeName].skipped++;
           }
-        };
-        request.onerror = () => reject(request.error);
-      });
-    }
-
-    async has(cid) {
-      const data = await this.fetch(cid);
-      return data !== null;
-    }
-
-    async list() {
-      await this.init();
-      
-      return new Promise((resolve, reject) => {
-        const transaction = this.db.transaction([STORE_NAME], 'readonly');
-        const store = transaction.objectStore(STORE_NAME);
-        const request = store.getAllKeys();
-
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-      });
-    }
-
-    async clear() {
-      await this.init();
-      
-      return new Promise((resolve, reject) => {
-        const transaction = this.db.transaction([STORE_NAME], 'readwrite');
-        const store = transaction.objectStore(STORE_NAME);
-        const request = store.clear();
-
-        request.onsuccess = () => resolve();
-        request.onerror = () => reject(request.error);
-      });
-    }
-
-    async size() {
-      await this.init();
-      
-      return new Promise((resolve, reject) => {
-        const transaction = this.db.transaction([STORE_NAME], 'readonly');
-        const store = transaction.objectStore(STORE_NAME);
-        const request = store.count();
-
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-      });
-    }
-
-    async export() {
-      await this.init();
-      
-      return new Promise((resolve, reject) => {
-        const transaction = this.db.transaction([STORE_NAME], 'readonly');
-        const store = transaction.objectStore(STORE_NAME);
-        const request = store.getAll();
-
-        request.onsuccess = () => {
-          const entries = request.result.map(item => ({
-            cid: item.cid,
-            data: JSON.parse(item.data)
-          }));
-          resolve(entries);
-        };
-        request.onerror = () => reject(request.error);
-      });
-    }
-
-    async import(entries) {
-      for (const entry of entries) {
-        await this.store(entry.data);
+        }
       }
+      return results;
     }
   }
 
-  // ============================================
-  // HYBRID STORE
-  // Memory cache + persistent backing store
-  // ============================================
-  class HybridStore extends BaseStore {
-    constructor(backingStore) {
-      super();
-      this.cache = new MemoryStore();
-      this.backing = backingStore;
+  const SESStoreModule = { 
+    Store: SESStore, 
+    STORES, 
+    DB_NAME, 
+    DB_VERSION, 
+    instance: null, 
+    getInstance: async function() { 
+      if (!this.instance) { 
+        this.instance = new SESStore(); 
+        await this.instance.init(); 
+      } 
+      return this.instance; 
+    },
+    createStore: async function(options = {}) {
+      // For compatibility with ses-ui.js
+      const store = new SESStore();
+      await store.init();
+      return store;
     }
-
-    async store(data) {
-      const cid = await this.cache.store(data);
-      await this.backing.store(data);
-      return cid;
-    }
-
-    async fetch(cid) {
-      // Try cache first
-      let data = await this.cache.fetch(cid);
-      if (data !== null) return data;
-
-      // Fall back to backing store
-      data = await this.backing.fetch(cid);
-      if (data !== null) {
-        // Populate cache
-        await this.cache.store(data);
-      }
-      return data;
-    }
-
-    async has(cid) {
-      return (await this.cache.has(cid)) || (await this.backing.has(cid));
-    }
-
-    async list() {
-      return this.backing.list();
-    }
-
-    async clear() {
-      await this.cache.clear();
-      await this.backing.clear();
-    }
-  }
-
-  // ============================================
-  // STORE FACTORY
-  // Creates appropriate store for environment
-  // ============================================
-  function createStore(options = {}) {
-    const { type = 'auto', dbName = 'ses-db' } = options;
-
-    if (type === 'memory') {
-      return new MemoryStore();
-    }
-
-    if (type === 'indexeddb') {
-      return new IndexedDBStore(dbName);
-    }
-
-    if (type === 'hybrid') {
-      return new HybridStore(new IndexedDBStore(dbName));
-    }
-
-    // Auto-detect
-    if (typeof indexedDB !== 'undefined') {
-      return new HybridStore(new IndexedDBStore(dbName));
-    }
-
-    return new MemoryStore();
-  }
-
-  // ============================================
-  // EXPORT
-  // ============================================
-  const SESStore = {
-    BaseStore,
-    MemoryStore,
-    IndexedDBStore,
-    HybridStore,
-    createStore,
-    generateCID
   };
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = SESStore;
+    module.exports = SESStoreModule;
   } else {
-    global.SESStore = SESStore;
+    global.SESStore = SESStoreModule;
   }
 
 })(typeof window !== 'undefined' ? window : global);
