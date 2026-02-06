@@ -1,0 +1,132 @@
+{
+  "name": "ses-context-os",
+  "displayName": "SES Context OS",
+  "description": "Automatic context capture and zero-cost context switching for VS Code",
+  "version": "1.0.0",
+  "publisher": "ses",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other",
+    "Productivity"
+  ],
+  "keywords": [
+    "context",
+    "workspace",
+    "productivity",
+    "ses"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "ses.captureContext",
+        "title": "SES: Capture Current Context",
+        "icon": "$(save)"
+      },
+      {
+        "command": "ses.switchContext",
+        "title": "SES: Switch Context",
+        "icon": "$(git-compare)"
+      },
+      {
+        "command": "ses.saveWorkspace",
+        "title": "SES: Save Workspace",
+        "icon": "$(save-all)"
+      },
+      {
+        "command": "ses.loadWorkspace",
+        "title": "SES: Load Workspace",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "ses.viewContexts",
+        "title": "SES: View All Contexts",
+        "icon": "$(list-tree)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "ses.captureContext",
+        "key": "ctrl+shift+s",
+        "mac": "cmd+shift+s",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "ses.switchContext",
+        "key": "ctrl+shift+c",
+        "mac": "cmd+shift+c"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "ses-contexts",
+          "title": "SES Contexts",
+          "icon": "$(archive)"
+        }
+      ]
+    },
+    "views": {
+      "ses-contexts": [
+        {
+          "id": "sesContextList",
+          "name": "Saved Contexts"
+        },
+        {
+          "id": "sesCurrentContext",
+          "name": "Current Context"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "SES Context OS",
+      "properties": {
+        "ses.autoCapture": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically capture context on file changes"
+        },
+        "ses.captureInterval": {
+          "type": "number",
+          "default": 60000,
+          "description": "Auto-capture interval in milliseconds (default: 1 minute)"
+        },
+        "ses.captureBreakpoints": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include breakpoints in context capture"
+        },
+        "ses.captureTasks": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include running tasks in context capture"
+        },
+        "ses.maxContexts": {
+          "type": "number",
+          "default": 50,
+          "description": "Maximum number of contexts to keep"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "pretest": "npm run lint",
+    "test": "node ./test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.80.0",
+    "@types/node": "^20.0.0",
+    "eslint": "^8.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ses/context-os-vscode"
+  },
+  "license": "MIT"
+}
