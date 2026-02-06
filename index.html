@@ -128,6 +128,24 @@
 <h3>AI Analysis (Ollama Layer)</h3>
 <div id="ai-response" class="ai-response" data-testid="ai-response"><p class="placeholder">AI analysis is separate from DCX runtime.<br>Results are CID-wrapped for reproducibility.</p></div>
 </div>
+<div class="result-section">
+<h3>Trace Analysis</h3>
+<div class="button-group">
+<button id="analyze-trace-btn" class="btn btn-secondary" disabled data-testid="analyze-trace-btn">Analyze Efficiency</button>
+<button id="detect-anomalies-btn" class="btn btn-secondary" disabled data-testid="detect-anomalies-btn">Detect Anomalies</button>
+<button id="generate-proof-btn" class="btn btn-secondary" disabled data-testid="generate-proof-btn">Generate PoE</button>
+</div>
+<div id="trace-analysis-result" class="trace-analysis-result" data-testid="trace-analysis-result"><p class="placeholder">Execute a pulse to analyze trace...</p></div>
+</div>
+<div class="result-section">
+<h3>Layer 4: Claims</h3>
+<div class="button-group">
+<button id="create-claim-btn" class="btn btn-secondary" disabled data-testid="create-claim-btn">Create Claim</button>
+<button id="attest-claim-btn" class="btn btn-secondary" disabled data-testid="attest-claim-btn">Attest</button>
+<button id="view-consensus-btn" class="btn btn-secondary" disabled data-testid="view-consensus-btn">View Consensus</button>
+</div>
+<div id="claims-display" class="claims-display" data-testid="claims-display"><p class="placeholder">Claims system ready. Create a claim about any CID...</p></div>
+</div>
 <div class="history-section">
 <h3>Recent Pulses</h3>
 <div id="pulse-list" class="pulse-list" data-testid="pulse-list"><p class="placeholder">No pulses yet...</p></div>
@@ -167,6 +185,7 @@
 
 <input type="file" id="import-file-input" accept=".json" style="display: none;">
 
+<!-- Layer 3 Core -->
 <script src="ses/pulse-schema.js"></script>
 <script src="ses/content-store.js"></script>
 <script src="ses/dcx-runtime.js"></script>
@@ -178,6 +197,13 @@
 <script src="ses/ses-context.js"></script>
 <script src="ses/ses-flow.js"></script>
 <script src="ses/ses-ai.js"></script>
+<!-- Layer 3 Enhancements -->
+<script src="ses/ses-symbolic-codec.js"></script>
+<script src="ses/ses-trace-analyzer.js"></script>
+<script src="ses/ses-proof-of-execution.js"></script>
+<!-- Layer 4 Consensus -->
+<script src="ses/ses-claims.js"></script>
+<!-- UI -->
 <script src="ses/ses-ui.js"></script>
 <script src="ses/ses-layer3-ui.js"></script>
 <script src="ses/ses-identity-network-ui.js"></script>
