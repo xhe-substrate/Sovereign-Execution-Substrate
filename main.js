@@ -1,17 +1,15 @@
 /**
  * SES Desktop - Electron Main Process
- * 
- * Handles:
- * - Window management
- * - Native OS integrations
- * - File system access
- * - IPC communication with renderer
  */
 
 const { app, BrowserWindow, ipcMain, globalShortcut, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs').promises;
 const chokidar = require('chokidar');
+
+// Set proper app name and data path
+app.setName('SES Context OS');
+const userDataPath = app.getPath('userData');
 
 let mainWindow = null;
 let fileWatcher = null;
@@ -32,7 +30,9 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js')
+      preload: path.join(__dirname, 'preload.js'),
+      // Use app-specific partition to avoid conflicts
+      partition: 'persist:ses-desktop'
     }
   });
 
@@ -46,6 +46,9 @@ function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+
+  console.log('✅ Window created');
+  console.log(`📁 User data: ${userDataPath}`);
 }
 
 // ============================================
@@ -99,7 +102,8 @@ function startFileWatcher() {
   fileWatcher = chokidar.watch(watchPaths, {
     ignored: /(^|[\/\\])\../, // ignore hidden files
     persistent: true,
-    ignoreInitial: true
+    ignoreInitial: true,
+    depth: 2 // limit depth to avoid too many files
   });
 
   fileWatcher
@@ -207,7 +211,8 @@ function setupIPC() {
       home: app.getPath('home'),
       documents: app.getPath('documents'),
       desktop: app.getPath('desktop'),
-      appData: app.getPath('appData')
+      appData: app.getPath('appData'),
+      userData: userDataPath
     };
   });
 
