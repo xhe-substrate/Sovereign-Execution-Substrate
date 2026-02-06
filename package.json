@@ -1,0 +1,54 @@
+{
+  "name": "ses-desktop",
+  "version": "2.0.0",
+  "description": "Sovereign Execution Substrate - Desktop Application",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux"
+  },
+  "keywords": ["ses", "context-os", "desktop", "productivity"],
+  "author": "SES Contributors",
+  "license": "MIT",
+  "dependencies": {
+    "electron-store": "^8.1.0",
+    "chokidar": "^3.5.3"
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "com.ses.desktop",
+    "productName": "SES Context OS",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "ses/**/*",
+      "index.html",
+      "style.css",
+      "main.js",
+      "preload.js",
+      "favicon.png"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "favicon.png",
+      "target": ["dmg", "zip"]
+    },
+    "win": {
+      "icon": "favicon.png",
+      "target": ["nsis", "portable"]
+    },
+    "linux": {
+      "icon": "favicon.png",
+      "target": ["AppImage", "deb"],
+      "category": "Development"
+    }
+  }
+}

@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SES - Sovereign Execution Substrate</title>
+<link rel="stylesheet" href="style.css">
+<!-- TIER 1: Critical Infrastructure -->
+<script src="ses/ses-p2p-network.js"></script>
+<script src="ses/ses-commons-platform.js"></script>
+<script src="ses/ses-desktop-integration.js"></script>
+<style>
+.identity-display { margin-right: 1rem; }
+.identity-badge { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: rgba(76, 175, 80, 0.1); border: 1px solid rgba(76, 175, 80, 0.3); border-radius: 4px; cursor: pointer; transition: all 0.2s; }
+.identity-badge:hover { background: rgba(76, 175, 80, 0.2); border-color: rgba(76, 175, 80, 0.5); }
+.identity-icon { font-size: 1.2rem; }
+.identity-did { font-family: 'Courier New', monospace; font-size: 0.85rem; color: #4CAF50; }
+.network-status { margin-left: 1rem; }
+.network-status .status-badge { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: rgba(33, 150, 243, 0.1); border: 1px solid rgba(33, 150, 243, 0.3); border-radius: 4px; }
+.status-detail { font-size: 0.75rem; opacity: 0.8; }
+.store-stats, .store-contents { margin-top: 1rem; padding: 1rem; background: rgba(255, 255, 255, 0.05); border-radius: 4px; }
+.store-stats h4, .store-contents h4 { margin: 0 0 0.5rem 0; color: #2196F3; }
+.store-stats p { margin: 0.25rem 0; font-size: 0.9rem; }
+.cid-list { list-style: none; padding: 0; margin: 0.5rem 0 0 0; max-height: 300px; overflow-y: auto; }
+.cid-item { padding: 0.5rem; margin: 0.25rem 0; background: rgba(255, 255, 255, 0.03); border-left: 3px solid #666; font-family: 'Courier New', monospace; font-size: 0.85rem; display: flex; align-items: center; justify-content: space-between; }
+.cid-item.pinned { border-left-color: #FFC107; background: rgba(255, 193, 7, 0.05); }
+.cid-hash { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pin-badge { margin-left: 0.5rem; font-size: 1rem; }
+</style>
+</head>
+<body>
+<div class="ses-app">
+<header class="ses-header">
+<div class="header-left">
+<h1 class="logo">SES</h1>
+<span class="version">v1.0.0</span>
+<span class="tagline">Sovereign Execution Substrate</span>
+</div>
+<div class="header-right">
+<div id="ai-status" class="ai-status"><span class="status-offline">○ Checking Ollama...</span></div>
+<div id="status" class="status-badge">Initializing...</div>
+</div>
+</header>
+
+<main class="ses-main">
+<section class="panel panel-create" data-testid="pulse-creation-panel">
+<h2 class="panel-title">Create Pulse</h2>
+<div class="form-group">
+<label for="function-select">Function</label>
+<select id="function-select" data-testid="function-select"><option value="fibonacci">Loading...</option></select>
+</div>
+<div class="form-group">
+<label for="pulse-input">Input (JSON)</label>
+<textarea id="pulse-input" data-testid="pulse-input" rows="3">{"n": 15}</textarea>
+</div>
+<div class="bounds-config">
+<h3>Resource Bounds</h3>
+<div class="bound-slider"><label>Max Steps: <span id="max-steps-label">10,000</span></label><input type="range" id="max-steps" min="100" max="100000" value="10000" data-testid="max-steps-slider"></div>
+<div class="bound-slider"><label>Max Memory: <span id="max-memory-label">10 MB</span></label><input type="range" id="max-memory" min="1048576" max="104857600" value="10485760" data-testid="max-memory-slider"></div>
+<div class="bound-slider"><label>Max Branch Depth: <span id="max-branches-label">50</span></label><input type="range" id="max-branches" min="5" max="200" value="50" data-testid="max-branches-slider"></div>
+<div class="bound-slider"><label>Max Time: <span id="max-time-label">10000ms</span></label><input type="range" id="max-time" min="1000" max="60000" value="10000" data-testid="max-time-slider"></div>
+</div>
+<div class="button-group">
+<button id="create-pulse-btn" class="btn btn-primary" data-testid="create-pulse-btn">Create & Sign Pulse</button>
+<button id="execute-pulse-btn" class="btn btn-execute" disabled data-testid="execute-pulse-btn">Execute</button>
+</div>
+<div class="button-group">
+<button id="replay-btn" class="btn btn-secondary" disabled data-testid="replay-btn">Replay</button>
+<button id="verify-btn" class="btn btn-secondary" disabled data-testid="verify-btn">Verify</button>
+<button id="ai-analyze-btn" class="btn btn-ai" disabled data-testid="ai-analyze-btn">AI Analyze</button>
+</div>
+<div class="layer3-controls">
+<h3>Layer 3 Core Operations</h3>
+<div class="button-group">
+<button id="validate-pulse-btn" class="btn btn-secondary" data-testid="validate-pulse-btn">Validate Pulse Schema</button>
+<button id="inspect-cid-btn" class="btn btn-secondary" data-testid="inspect-cid-btn">Inspect CID Store</button>
+</div>
+<div class="button-group">
+<button id="export-store-btn" class="btn btn-secondary" data-testid="export-store-btn">Export Network</button>
+<button id="import-store-btn" class="btn btn-secondary" data-testid="import-store-btn">Import Network</button>
+</div>
+</div>
+<button id="clear-btn" class="btn btn-danger btn-small" data-testid="clear-btn">Clear All Data</button>
+</section>
+
+<section class="panel panel-execution" data-testid="execution-panel">
+<h2 class="panel-title">Execution</h2>
+<div class="bounds-display" data-testid="bounds-display">
+<h3>Resource Usage</h3>
+<div class="bound-meter"><div class="bound-label"><span>Steps</span><span id="steps-value">0 / 10,000</span></div><div class="progress-container"><div id="steps-progress" class="progress-bar" style="width: 0%"></div></div></div>
+<div class="bound-meter"><div class="bound-label"><span>Memory</span><span id="memory-value">0 B / 10 MB</span></div><div class="progress-container"><div id="memory-progress" class="progress-bar" style="width: 0%"></div></div></div>
+<div class="bound-meter"><div class="bound-label"><span>Branch Depth</span><span id="branch-value">0 / 50</span></div><div class="progress-container"><div id="branch-progress" class="progress-bar" style="width: 0%"></div></div></div>
+<div class="bound-meter"><div class="bound-label"><span>Time</span><span id="time-value">0ms / 10000ms</span></div><div class="progress-container"><div id="time-progress" class="progress-bar" style="width: 0%"></div></div></div>
+</div>
+<div class="cid-section" data-testid="cid-display">
+<h3>Content Identifiers (CIDs)</h3>
+<div id="pulse-display" class="pulse-display"><p class="placeholder">Create a pulse to see CIDs...</p></div>
+</div>
+<div class="validation-section">
+<h3>Schema Validation</h3>
+<div id="validation-display" class="validation-display" data-testid="validation-display"><p class="placeholder">Validate a pulse to see schema compliance...</p></div>
+</div>
+<div class="trace-section">
+<h3>Execution Trace</h3>
+<div id="trace-display" class="trace-display" data-testid="trace-display"><p class="placeholder">Execute a pulse to see trace...</p></div>
+</div>
+<div class="output-section">
+<h3>Output</h3>
+<div id="output-display" class="output-display" data-testid="output-display"><p class="placeholder">Execute a pulse to see output...</p></div>
+</div>
+</section>
+
+<section class="panel panel-results" data-testid="results-panel">
+<h2 class="panel-title">Verification & AI</h2>
+<div class="result-section">
+<h3>Content Store</h3>
+<div id="store-inspector" data-testid="store-inspector">
+<p class="placeholder">Content-addressed storage viewer...</p>
+<div id="store-stats" class="store-stats"></div>
+<div id="store-contents" class="store-contents"></div>
+</div>
+</div>
+<div class="result-section">
+<h3>Replay Result</h3>
+<div id="replay-result" data-testid="replay-result"><p class="placeholder">Replay a pulse to verify determinism...</p></div>
+</div>
+<div class="result-section">
+<h3>Verification Result</h3>
+<div id="verify-result" data-testid="verify-result"><p class="placeholder">Verify a pulse for deterministic replay...</p></div>
+</div>
+<div class="ai-section">
+<h3>AI Analysis (Ollama Layer)</h3>
+<div id="ai-response" class="ai-response" data-testid="ai-response"><p class="placeholder">AI analysis is separate from DCX runtime.<br>Results are CID-wrapped for reproducibility.</p></div>
+</div>
+<div class="result-section">
+<h3>Trace Analysis</h3>
+<div class="button-group">
+<button id="analyze-trace-btn" class="btn btn-secondary" disabled data-testid="analyze-trace-btn">Analyze Efficiency</button>
+<button id="detect-anomalies-btn" class="btn btn-secondary" disabled data-testid="detect-anomalies-btn">Detect Anomalies</button>
+<button id="generate-proof-btn" class="btn btn-secondary" disabled data-testid="generate-proof-btn">Generate PoE</button>
+</div>
+<div id="trace-analysis-result" class="trace-analysis-result" data-testid="trace-analysis-result"><p class="placeholder">Execute a pulse to analyze trace...</p></div>
+</div>
+<div class="result-section">
+<h3>Layer 4: Claims</h3>
+<div class="button-group">
+<button id="create-claim-btn" class="btn btn-secondary" disabled data-testid="create-claim-btn">Create Claim</button>
+<button id="attest-claim-btn" class="btn btn-secondary" disabled data-testid="attest-claim-btn">Attest</button>
+<button id="view-consensus-btn" class="btn btn-secondary" disabled data-testid="view-consensus-btn">View Consensus</button>
+</div>
+<div id="claims-display" class="claims-display" data-testid="claims-display"><p class="placeholder">Claims system ready. Create a claim about any CID...</p></div>
+</div>
+<div class="history-section">
+<h3>Recent Pulses</h3>
+<div id="pulse-list" class="pulse-list" data-testid="pulse-list"><p class="placeholder">No pulses yet...</p></div>
+</div>
+</section>
+</main>
+
+<footer class="ses-footer">
+<div class="log-container">
+<h3>System Log</h3>
+<div id="log" class="log" data-testid="system-log"></div>
+</div>
+</footer>
+
+<aside class="architecture-info" data-testid="architecture-info">
+<h3>SES Core Invariants</h3>
+<ul>
+<li>✓ Every state change originates from a Pulse</li>
+<li>✓ No unbounded execution anywhere</li>
+<li>✓ All results replayable from CIDs</li>
+<li>✓ Resource use explicit and capped</li>
+<li>✓ Parallelism is bounded</li>
+<li>✓ AI is above DCX, never inside</li>
+<li>✓ Identity is self-sovereign (Ed25519)</li>
+<li>✓ Storage is content-addressed (IndexedDB)</li>
+</ul>
+<div class="layer3-status">
+<h4>Layer 3 Core Status</h4>
+<div id="layer3-info">
+<p>Schema Version: <span id="schema-version">-</span></p>
+<p>Store Size: <span id="store-size">0</span> items</p>
+<p>Runtime: <span id="runtime-status">Not initialized</span></p>
+</div>
+</div>
+</aside>
+</div>
+
+<input type="file" id="import-file-input" accept=".json" style="display: none;">
+
+<!-- Layer 3 Core -->
+<script src="ses/pulse-schema.js"></script>
+<script src="ses/content-store.js"></script>
+<script src="ses/dcx-runtime.js"></script>
+<script src="ses/index.js"></script>
+<script src="ses/ses-core.js"></script>
+<script src="ses/ses-store.js"></script>
+<script src="ses/ses-identity.js"></script>
+<script src="ses/ses-verify.js"></script>
+<script src="ses/ses-context.js"></script>
+<script src="ses/ses-flow.js"></script>
+<script src="ses/ses-ai.js"></script>
+<script src="ses/ses-network.js"></script>
+<!-- Layer 3 Enhancements -->
+<script src="ses/ses-symbolic-codec.js"></script>
+<script src="ses/ses-trace-analyzer.js"></script>
+<script src="ses/ses-proof-of-execution.js"></script>
+<!-- Layer 4 Consensus -->
+<script src="ses/ses-claims.js"></script>
+<script src="ses/ses-agent-consensus.js"></script>
+<!-- Layer 5 Cognitive & Economic -->
+<script src="ses/ses-contribution-graph.js"></script>
+<script src="ses/ses-cst.js"></script>
+<script src="ses/ses-shapley.js"></script>
+<script src="ses/ses-context-os.js"></script>
+<!-- Layer 6 Flow Orchestration -->
+<script src="ses/ses-flow-executor.js"></script>
+<!-- Layer 7 Applications -->
+<script src="ses/ses-scaffold.js"></script>
+<!-- UI -->
+<script src="ses/ses-ui.js"></script>
+<script src="ses/ses-layer3-ui.js"></script>
+<script src="ses/ses-identity-network-ui.js"></script>
+<script src="ses/ses-enhanced-ui.js"></script>
+</body>
+</html>
